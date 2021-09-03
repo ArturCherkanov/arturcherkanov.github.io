@@ -1,0 +1,162 @@
+
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <style>
+        body, html {
+          margin:0px;
+          height:100%;
+          overflow:hidden;
+        }
+        .map, canvas {
+          width:100%;
+          height:100%;
+        }
+      </style>
+      <!--
+
+      *** NOTE ***
+
+      If this example uses external assets, you may encounter a 404 for each image
+
+      This is because you do not have external resource on your local machine.
+      Swap out the assets for some of your own local assets to resolve this issue.
+
+      - Jibestream
+
+      -->
+    </head>
+    <body>
+      <div id="map" class="map"></div>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/1.19.0/easing/EasePack.min.js"></script>
+      
+          <script src="https://cdn.jibestream.com/web/4.9.0/jmap.min.js"></script>
+          
+          <script src="https://cdn.jibestream.com/web/plugins/mapuikit/v1.0.1/mapuikit.js"></script>
+          
+      <script>
+        // Auth creds
+        window.clientId = '5a1e5ea2-0610-4438-bafa-f19d276aa7e2';
+        window.clientSecret = 'YMh/gJUh6rN6DvxbokCpLmuZC8pRqKfOnMs6PrOUEpM=';
+
+        // Run code example
+        window.onload = function(){
+          'use strict';
+
+var config = {
+  host: 'https://api.jibestream.com',
+  auth: new jmap.core.Auth(clientId, clientSecret),
+  customerId: 51,
+  venueId: 443,
+  userLocationOptions: {
+    position: [2720, 2758],
+    confidenceAlpha: 0.3,
+    confidencePercent: 0.5,
+    width: 12,
+    pulseVisible: true
+  }
+};
+
+jmap.dispatcher.subscribe('ready', function () {
+  var control = jibestream.control,
+      activeVenue = jibestream.activeVenue;
+
+
+  var uiKit = new MapUIKit(control, {
+    padding: [20, 20, 20, 20]
+  });
+  uiKit.renderCompass();
+
+  var pathStyle = new jmap.Style({
+    stroke: '#ffc956',
+    strokeWidth: 3
+  });
+  var wp1 = activeVenue.maps.getWaypointById(145078);
+  var wp2 = activeVenue.maps.getWaypointById(145001);
+  var path = control.wayfindBetweenWaypoints(wp1, wp2);
+  control.drawWayfindingPath(path, pathStyle);
+
+  animateMovingObjectAlongPath(control.userLocation, path, 6000, control);
+});
+
+// Create new jmap instance and show map
+var jibestream = jmap.init(config);
+
+function getDistanceFromPath(path) {
+  var distance = function distance(a, b) {
+    return window.jungle.util.distanceBetweenPoints(a, b);
+  };
+  return path.reduce(function (acc, p) {
+    return p.points.reduce(function (floorAcc, point, i) {
+      if (p.points[i + 1]) {
+        return floorAcc + distance(point.coordinates, p.points[i + 1].coordinates);
+      }
+      return floorAcc;
+    }, acc);
+  }, 0);
+}
+
+function animateMovingObjectAlongPath(mo, paths, duration, control) {
+  var distance = function distance(a, b) {
+    return window.jungle.util.distanceBetweenPoints(a, b);
+  };
+  var totalDistance = getDistanceFromPath(paths); // Total distance travelled
+  var animationDuration = duration || totalDistance / mo.speed * 1000;
+  var pointsByMap = paths.map(function (path) {
+    var points = path.points.map(function (p) {
+      return {
+        x: p.coordinates[0],
+        y: p.coordinates[1],
+        mapId: path.mapId
+      };
+    });
+    return points;
+  });
+  var flattenedPoints = pointsByMap.reduce(function (acc, path) {
+    return acc.concat(path);
+  }, []);
+  var animations = flattenedPoints.reduce(function (acc, point, i) {
+    if (flattenedPoints[i + 1]) {
+      var dist = distance([point.x, point.y], [flattenedPoints[i + 1].x, flattenedPoints[i + 1].y]); // distance for this animation
+      var animation = Tweeny.to(point, dist / totalDistance * animationDuration, {
+        x: flattenedPoints[i + 1].x,
+        y: flattenedPoints[i + 1].y,
+        onUpdate: function onUpdate() {
+          mo.position = [point.x, point.y];
+          mo.updateMovingObjectTransform();
+        },
+        onComplete: function onComplete() {
+          animations.shift();
+          setTimeout(function () {
+            if (animations.length) {
+              updateRotation(animations[0], control);
+              animations[0].play();
+            }
+          }, 2000);
+        }
+      });
+      animation.pause();
+      return acc.concat(animation);
+    }
+    return acc;
+  }, []);
+  requestAnimationFrame(function () {
+    updateRotation(animations[0], control);
+    animations[0].play();
+  });
+}
+
+function updateRotation(animation, control) {
+  var origin = [animation.values.x, animation.values.y];
+  var nextPoint = [animation.options.x, animation.options.y];
+  var angle = jungle.util.getDegreesBetweenPoints(origin, nextPoint);
+  control.setMapTransform(new jmap.Transform({
+    rotation: angle,
+    animation: new jmap.Animation({ duration: 1 })
+  }));
+}
+
+        }
+      </script>
+    </body>
+  </html>
